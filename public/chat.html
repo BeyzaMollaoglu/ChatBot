@@ -1,0 +1,133 @@
+<!doctype html>
+<html lang="tr">
+<head>
+  <meta charset="utf-8" />
+  <title>AI Chat</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    body { font-family: system-ui, sans-serif; margin:0; padding:24px; background:#f6f7f9; }
+    .wrap { max-width:700px; margin:0 auto; }
+    .card { background:#fff; border:1px solid #e5e7eb; border-radius:12px; padding:16px; box-shadow:0 10px 20px rgba(0,0,0,.05); }
+    .msgs { height: 400px; overflow:auto; padding:8px; border:1px solid #eee; border-radius:8px; background:#fafafa; }
+    .msg { margin:8px 0; max-width:80%; padding:8px 10px; border-radius:10px; border:1px solid #eee; word-break:break-word; }
+    .you { background:#e8f0ff; margin-left:auto; }
+    .bot { background:#f5f5f5; }
+    .row { display:flex; gap:8px; margin-top:12px; }
+    input { flex:1; padding:10px; border:1px solid #ddd; border-radius:8px; }
+    button { padding:10px 14px; border:1px solid #ddd; border-radius:8px; cursor:pointer; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>AI Chat</h1>
+    <div class="card">
+      <div id="msgs" class="msgs"></div>
+      <div class="row">
+        <input id="inp" placeholder="Mesaj yazın… (ör. selam)" />
+        <button id="send">Gönder</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const msgs = document.getElementById("msgs");
+    const inp  = document.getElementById("inp");
+    const btn  = document.getElementById("send");
+
+    const add = (cls, text) => {
+      const el = document.createElement("div");
+      el.className = "msg " + cls;
+      el.textContent = text;
+      msgs.appendChild(el);
+      msgs.scrollTop = msgs.scrollHeight;
+    };
+
+    add("bot", "Merhaba! 'selam' yazarak deneyebilirsin.");
+
+  async function send(text) {
+    if (!text.trim()) return;
+    bubble("you", text);
+    const loading = bubble("bot", "Yükleniyor…");
+
+    try {
+      const r = await fetch("http://localhost:11434/api/chat", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "llama3.1:8b",   // Ollama model adını buraya yaz (örn: "mistral", "llama3")
+          messages: [
+            { role: "user", content: text.trim() }
+          ],
+          stream: false
+        })
+      });
+
+      const data = await r.json();
+      loading.textContent = data?.message?.content || "Bir şey ters gitti.";
+
+    } catch (err) {
+      console.error(err);
+      loading.textContent = "Sunucuya ulaşılamadı.";
+    }
+  }
+
+  // ---------- Eventler ----------
+  sendBtn.onclick = () => { const v = inp.value; inp.value = ""; send(v); };
+  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); sendBtn.click(); }});
+    
+  function renderOptions(options = []) {
+    if (!Array.isArray(options) || !options.length) return;
+
+    const wrap = document.createElement("div");
+    wrap.className = "opts";
+
+    options.forEach((opt) => {
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "optbtn";
+      btn.textContent = opt.label || "Seç";
+      btn.addEventListener("click", () => onOptionClick(opt, btn));
+      wrap.appendChild(btn);
+    });
+
+    msgs.appendChild(wrap);
+    msgs.scrollTop = msgs.scrollHeight;
+  }
+
+  async function onOptionClick(opt, btnEl) {
+    bubble("you", btnEl.textContent);
+    const loading = bubble("bot", "Yükleniyor…");
+
+    try {
+      // /api/action sözleşmesine göre:
+      // { type: "open_url"|"database"|..., value: "/login.html" }
+      const res = await fetch(ACTION_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: opt.type, value: opt.value })
+      });
+      const data = await res.json();
+
+      if (data.success && data.action === "redirect" && data.url) {
+        loading.textContent = data.message || "Yönlendiriliyor…";
+        try { localStorage.setItem(NAV_CLOSE_KEY, "1"); } catch {}
+        window.location.assign(data.url);
+        return;
+      }
+
+      if (data.success && data.action === "show_data") {
+        loading.textContent = data.message || "Bilgiler:";
+        bubble("bot", data.data || "");
+        return;
+      }
+
+      loading.textContent = data.message || "İşlem gerçekleştirilemedi.";
+    } catch (err) {
+      console.error(err);
+      loading.textContent = "Bir sorun oluştu. Lütfen tekrar deneyin.";
+    }
+  }
+  </script>
+  <script src="chat-widget.js"></script>
+</body>
+</html>

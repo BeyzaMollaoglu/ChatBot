@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rastgele İlham Sayfası</title>
+<style>
+  :root{
+    --glass: rgba(255,255,255,.12);
+    --border: rgba(255,255,255,.25);
+    --text: #eef3ff;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%}
+  body{
+    margin:0;
+    font-family: ui-rounded, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Apple Color Emoji","Segoe UI Emoji";
+    color:var(--text);
+    background:#0f1221;
+    background-image: radial-gradient(1200px 600px at 10% 10%, #ffffff10, transparent 60%),
+                      radial-gradient(900px 500px at 90% 90%, #ffffff0a, transparent 60%);
+    transition: background 600ms ease;
+    display:grid;
+    place-items:center;
+    overflow:hidden;
+  }
+  .card{
+    width:min(720px, 92vw);
+    backdrop-filter: blur(12px) saturate(120%);
+    background:var(--glass);
+    border:1px solid var(--border);
+    border-radius:20px;
+    padding:28px;
+    box-shadow: 0 15px 40px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.1);
+  }
+  .row{display:flex; gap:14px; flex-wrap:wrap; align-items:center; justify-content:space-between}
+  h1{font-size:clamp(22px, 3.2vw, 32px); margin:0 0 8px}
+  .emoji{font-size: clamp(40px, 8vw, 64px)}
+  .quote{font-size:clamp(16px, 2.2vw, 20px); opacity:.95; line-height:1.5; margin:10px 0 0}
+  .btns{display:flex; gap:10px; flex-wrap:wrap; margin-top:18px}
+  button{
+    cursor:pointer;
+    border:1px solid var(--border);
+    background:linear-gradient(#ffffff18, #ffffff07);
+    color:var(--text);
+    padding:10px 14px;
+    border-radius:12px;
+    font-weight:600;
+    letter-spacing:.2px;
+    transition: transform .06s ease, box-shadow .2s ease, background .2s ease;
+  }
+  button:hover{ box-shadow:0 6px 18px rgba(0,0,0,.25) inset; }
+  button:active{ transform:translateY(1px) scale(.99); }
+  .code{
+    margin-top:14px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+    font-size:12.5px;
+    background:#0000003a;
+    border:1px dashed var(--border);
+    border-radius:12px;
+    padding:12px;
+    word-break:break-all;
+    white-space:pre-wrap;
+    color:#e8edff;
+  }
+  .hint{opacity:.8; font-size:12.5px; margin-top:8px}
+  /* dekoratif kabarcıklar */
+  .bubble{
+    position:absolute; border-radius:50%;
+    filter: blur(20px); opacity:.25; pointer-events:none;
+    mix-blend-mode: screen;
+    animation: float 14s linear infinite;
+  }
+  @keyframes float{
+    from{ transform: translateY(30vh) translateX(-10vw) scale(.9); }
+    to{ transform: translateY(-40vh) translateX(10vw) scale(1.05); }
+  }
+</style>
+</head>
+<body>
+  <div class="bubble" id="b1" style="width:220px;height:220px;left:5vw;bottom:-10vh;background:#fff;"></div>
+  <div class="bubble" id="b2" style="width:300px;height:300px;right:5vw;bottom:-15vh;background:#fff;animation-duration:18s;"></div>
+
+  <main class="card">
+    <div class="row">
+      <h1>🎨 Rastgele İlham Üretici</h1>
+      <div class="emoji" id="emoji">✨</div>
+    </div>
+    <p class="quote" id="quote">“Bugün küçük bir adım, yarın büyük bir fark yaratır.”</p>
+
+    <div class="btns">
+      <button id="copyBtn">CSS’i Kopyala</button>
+      <button id="toggleBtn">Koyu/Açık</button>
+    </div>
+
+    <pre class="code" id="cssOut">/* Gradyan CSS’i burada görünecek */</pre>
+    <div class="hint">İpucu: Boşluk tuşu ile de rastgele oluşturabilirsin.</div>
+  </main>
+
+<script>
+  const emojis = ["✨","🚀","🌈","🔥","🌟","🧠","🪄","💡","🎯","🍀","🌊","🧭","📚","🧩","🪐"];
+  const quotes = [
+    "“Bugün küçük bir adım, yarın büyük bir fark yaratır.”",
+    "“Mükemmel iyinin düşmanı olmasın; başla.”",
+    "“Süreklilik, hızdan daha güçlüdür.”",
+    "“Düşün, dene, düzelt, tekrar et.”",
+    "“Basit başla; büyütmek kolaylaşır.”",
+    "“Her gün %1 daha iyi.”",
+    "“Cesaret konfor alanının diğer ucudur.”",
+    "“Odak: Daha az, ama daha iyi.”"
+  ];
+
+  const emojiEl = document.getElementById('emoji');
+  const quoteEl = document.getElementById('quote');
+  const cssOut = document.getElementById('cssOut');
+  const randomBtn = document.getElementById('randomBtn');
+  const copyBtn = document.getElementById('copyBtn');
+  const toggleBtn = document.getElementById('toggleBtn');
+
+  let dark = true;
+
+  function rand(min, max){ return Math.random()*(max-min)+min; }
+  function hsl(h,s,l){ return `hsl(${h}deg ${s}% ${l}%)`; }
+
+  function randomGradient(){
+    // Uyumlu iki renk (HSL komşuları)
+    const baseH = Math.floor(rand(0,360));
+    const c1 = hsl(baseH, Math.floor(rand(60,85)), Math.floor(rand(40,60)));
+    const c2 = hsl((baseH+40)%360, Math.floor(rand(60,85)), Math.floor(rand(40,60)));
+    const angle = Math.floor(rand(10,170));
+    const css = `linear-gradient(${angle}deg, ${c1}, ${c2})`;
+    document.body.style.backgroundImage = css + 
+      `, radial-gradient(1200px 600px at 10% 10%, #ffffff10, transparent 60%), radial-gradient(900px 500px at 90% 90%, #ffffff0a, transparent 60%)`;
+    cssOut.textContent = `background-image: ${css};`;
+    // kabarcık renkleri
+    document.getElementById('b1').style.background = c1;
+    document.getElementById('b2').style.background = c2;
+  }
+
+  function randomInspiration(){
+    emojiEl.textContent = emojis[Math.floor(Math.random()*emojis.length)];
+    quoteEl.textContent = quotes[Math.floor(Math.random()*quotes.length)];
+  }
+
+  function randomizeAll(){
+    randomGradient();
+    randomInspiration();
+  }
+
+  randomBtn.addEventListener('click', randomizeAll);
+  document.addEventListener('keydown', e=>{
+    if (e.code === 'Space'){ e.preventDefault(); randomizeAll(); }
+  });
+
+  copyBtn.addEventListener('click', async ()=>{
+    try{
+      await navigator.clipboard.writeText(cssOut.textContent.trim());
+      copyBtn.textContent = "Kopyalandı ✔";
+      setTimeout(()=>copyBtn.textContent="CSS’i Kopyala", 1200);
+    }catch{
+      alert("Kopyalanamadı :(");
+    }
+  });
+
+  toggleBtn.addEventListener('click', ()=>{
+    dark = !dark;
+    if (dark){
+      document.documentElement.style.setProperty('--glass','rgba(255,255,255,.12)');
+      document.documentElement.style.setProperty('--border','rgba(255,255,255,.25)');
+      document.documentElement.style.setProperty('--text','#eef3ff');
+    }else{
+      document.documentElement.style.setProperty('--glass','rgba(255,255,255,.6)');
+      document.documentElement.style.setProperty('--border','rgba(0,0,0,.08)');
+      document.documentElement.style.setProperty('--text','#0e1222');
+    }
+  });
+
+  // İlk yüklemede çalıştır
+  randomizeAll();
+</script>
+  <script src="chat-widget.js"></script>
+</body>
+</html>

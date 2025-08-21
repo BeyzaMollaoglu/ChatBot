@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sing In</title>
+  <style>
+    /* Navbar style */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 50px;
+    background: rgba(0, 0, 50, 0.3);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+  }
+
+  .nav-logo {
+    font-weight: bold;
+    color: #fff;
+    font-size: 16px;
+    text-decoration: none;
+  }
+
+  .nav-links {
+    list-style: none;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links li a {
+    text-decoration: none;
+    color: #e0f0ff;
+    font-size: 14px;
+    transition: color 0.3s ease;
+  }
+
+  .nav-links li a:hover {
+    color: #a1c4fd;
+  }
+
+  .nav-toggle {
+    display: none;
+  }
+
+  .nav-toggle-label {
+    display: none;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-toggle-label span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #fff;
+  }
+
+  .user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.user-icon {
+  font-size: 20px;
+  margin-left: 20px;
+  color: #fff;
+}
+
+.dropdown {
+  display: none;
+  position: absolute;
+  top: 35px;
+  right: 0;
+  background: rgba(0, 0, 50, 0.95);
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 120px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown span {
+  display: block;
+  color: #e0f0ff;
+  margin-bottom: 8px;
+}
+
+.dropdown a {
+  color: #ffb3b3;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.user-menu.open .dropdown {
+  display: block;
+}
+
+  /* Sayfa içeriğini navbar'ın altına iter */
+  .with-navbar {
+    margin-top: 60px;
+  }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #83b0f7, #c2e9fb); 
+      backdrop-filter: blur(8px);
+    }
+
+    .login-container {
+      background: rgba(0, 0, 50, 0.2);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(14px);
+      color: #fff;
+      width: 400px;
+      max-width: 90%;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+    }
+
+    .form-group {
+      margin: 15px 0;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      background-color: #0056b3;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #003d80;
+      transform: scale(1.03);
+    }
+
+    .switch {
+      text-align: center;
+      margin-top: 15px;
+    }
+
+    .switch a {
+      color: #a6d1ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .switch a:hover {
+      text-decoration: underline;
+    }
+
+    .error {
+      color: #fb8b8b;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+  #verification-message {
+      background-color: #4CAF50;  /* Yeşil renk */
+      color: white;
+      padding: 10px;
+      border-radius: 5px;
+      text-align: center;
+      margin-bottom: 20px;
+      font-size: 16px;
+      visibility: hidden; /* Initially hidden */
+      opacity: 0; /* Invisible initially */
+      transition: opacity 1s ease, visibility 1s ease;
+    }
+
+    /* Style for the popup */
+    .popup {
+      display: none;
+      position: fixed;
+      justify-content: center;
+      align-items: center;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      color: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.25);
+      z-index: 1001;
+    }
+
+    .popup button {
+      background-color: #f89191;  /* Kırmızımsı bir renk */
+      color: rgb(255, 255, 255);
+      border: none;
+      padding: 5px 12px; 
+      cursor: pointer;
+      font-size: 14px;  
+      border-radius: 5px; 
+    }
+
+    .popup button:hover {
+      background-color: #fcbfbf;  /* Daha açık kırmızımsı renk */
+    }
+
+    @media (max-width: 480px) {
+      .login-container {
+        width: 90%;
+        padding: 30px 20px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      button {
+        font-size: 15px;
+      }
+
+      .popup {
+      width: 80%; 
+      padding: 15px; 
+      }
+
+      .popup button {
+      padding: 6px 12px; 
+      font-size: 12px;  
+      }
+
+      .with-navbar {
+      margin-top: 60px;
+      min-height: calc(100vh - 60px);
+    }
+    }
+    
+  </style>
+</head>
+<body>
+    <nav class="navbar">
+    <a href="index.html" class="nav-logo">Smart Socket</a> 
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="login.html">Sign In/Up</a></li>
+    </ul>
+    <label for="nav-toggle" class="nav-toggle-label">
+        <span></span>
+        <span></span>
+        <span></span>
+    </label>
+    <div class="user-menu" style="display: none;">
+      <ul class="nav-links">
+        <li><a href="signout.html">Home</a></li>
+        <li><a href="panel.html">Socket</a></li>
+      </ul>
+      <div class="user-icon">👤</div>
+      <div class="dropdown">
+        <span id="user-name">Username</span>
+        <a href="#" id="logout-btn">Sign Out</a>
+      </div>
+    </div>
+    </nav>
+    
+  <div class="login-container">
+    <h1>Sign In</h1>
+    <div id="login-form">
+      <div class="form-group">
+        <label for="login-username">Username</label>
+        <input type="text" id="login-username" placeholder="Enter your username" />
+      </div>
+      <div class="form-group">
+        <label for="login-password">Password</label>
+        <input type="password" id="login-password" placeholder="Enter your password" />
+      </div>
+      <button onclick="login()">Sign In</button>
+      <div class="error" id="error-msg"></div>
+    </div>
+    <div class="switch">
+      <p>Don't have an account? <a href="register.html">Sing Up here</a></p>
+    </div>
+   
+
+  </div>
+
+   <div id="verification-message" style="display: none; opacity: 0;">
+    Your email has been successfully verified! You can now sign in.
+</div>
+  <!-- Popup Message for Email Verification Success -->
+    <div class="popup" id="popup-message">
+      <p>Your email has been successfully verified! You can now sign in.</p>
+      <button onclick="closePopup()">OK</button>
+    </div>
+
+    <div id="verification-message" style="display: none; opacity: 0;">
+      Your email has been successfully verified! You can now sign in.
+    </div>
+
+  <script>
+    async function login() {
+      const username = document.getElementById("login-username").value;
+      const password = document.getElementById("login-password").value;
+      const errorMsg = document.getElementById("error-msg");
+
+      try {
+        const response = await fetch("/login", {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ username, password }),
+        });
+
+        if (response.ok) {
+          window.location.href = "panel.html";
+        } else {
+          const result = await response.json();
+          errorMsg.textContent = result.message || "Login failed.";
+        }
+      } catch (error) {
+        errorMsg.textContent = "Server error.";
+        console.error(error);
+      }
+    }
+  </script>
+  <script src="navbar.js"></script>
+
+    <script>
+    // Check for the verification success query parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.has('verified') && urlParams.get('verified') === 'true') {
+      const verificationMessage = document.getElementById('verification-message');
+      const popupMessage = document.getElementById('popup-message');
+      
+      // Show the message
+      verificationMessage.style.visibility = 'visible';
+      verificationMessage.style.opacity = 1;  // Fade in
+
+      // Show the popup
+      popupMessage.style.display = 'block';
+
+      // Hide the message after 5 seconds
+      setTimeout(() => {
+        verificationMessage.style.opacity = 0;  // Fade out
+        setTimeout(() => {
+          verificationMessage.style.visibility = 'hidden';  // Hide completely
+        }, 1000); // Delay before visibility is hidden
+      }, 5000); // Keep visible for 5 seconds
+    }
+
+    // Function to close the popup when "OK" is clicked
+  window.onclick = function(event) {
+    const popup = document.getElementById('popup-message');
+    
+    // Eğer tıklanan alan popup dışında bir yerse popup'ı kapat
+    if (event.target !== popup && !popup.contains(event.target)) {
+      closePopup();
+    }
+  };
+
+  // Popup'ı kapatacak fonksiyon
+  function closePopup() {
+    document.getElementById('popup-message').style.display = 'none';
+  }
+  </script>
+  <script src="chat-widget.js"></script>
+  
+</body>
+</html>

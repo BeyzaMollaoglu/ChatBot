@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Sign Up</title>
+  <style>
+    /* Navbar style */
+  * {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+  }
+
+  body {
+    overflow-x: hidden;
+  }
+
+  .navbar {
+    position: fixed;
+    top: 0;
+    width: 100%;
+    height: 50px;
+    background: rgba(0, 0, 50, 0.3);
+    backdrop-filter: blur(8px);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 20px;
+    z-index: 1000;
+  }
+
+  .nav-logo {
+    font-weight: bold;
+    color: #fff;
+    font-size: 16px;
+    text-decoration: none;
+  }
+
+  .nav-links {
+    list-style: none;
+    display: flex;
+    gap: 16px;
+    flex-wrap: wrap;
+  }
+
+  .nav-links li a {
+    text-decoration: none;
+    color: #e0f0ff;
+    font-size: 14px;
+    transition: color 0.3s ease;
+  }
+
+  .nav-links li a:hover {
+    color: #a1c4fd;
+  }
+
+  .nav-toggle {
+    display: none;
+  }
+
+  .nav-toggle-label {
+    display: none;
+    cursor: pointer;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .nav-toggle-label span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background: #fff;
+  }
+
+  /* Sayfa içeriğini navbar'ın altına iter */
+  .with-navbar {
+    margin-top: 60px;
+  }
+
+    body {
+      margin: 0;
+      padding: 0;
+      height: 100vh;
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: linear-gradient(135deg, #83b0f7, #c2e9fb);
+      backdrop-filter: blur(8px);
+    }
+
+    .login-container {
+      background: rgba(0, 0, 50, 0.2);
+      padding: 40px;
+      border-radius: 20px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+      backdrop-filter: blur(14px);
+      color: #fff;
+      width: 400px;
+      max-width: 90%;
+    }
+
+    h1 {
+      text-align: center;
+      font-size: 2rem;
+      margin-bottom: 20px;
+      text-shadow: 1px 1px 4px rgba(0,0,0,0.5);
+    }
+
+    .form-group {
+      margin: 15px 0;
+    }
+
+    label {
+      font-weight: 600;
+      display: block;
+      margin-bottom: 5px;
+    }
+
+    input {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #ccc;
+      font-size: 16px;
+    }
+
+    button {
+      width: 100%;
+      padding: 12px;
+      margin-top: 20px;
+      background-color: #0056b3;
+      color: white;
+      font-size: 16px;
+      font-weight: bold;
+      border: none;
+      border-radius: 30px;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(0, 123, 255, 0.3);
+      transition: background-color 0.3s ease, transform 0.2s ease;
+    }
+
+    button:hover {
+      background-color: #003d80;
+      transform: scale(1.03);
+    }
+
+    .switch {
+      text-align: center;
+      margin-top: 15px;
+    }
+
+    .switch a {
+      color: #a6d1ff;
+      text-decoration: none;
+      font-weight: bold;
+    }
+
+    .switch a:hover {
+      text-decoration: underline;
+    }
+
+    .error {
+      color: #fb8b8b;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+    .success {
+      color: #b3ffcc;
+      text-align: center;
+      margin-top: 12px;
+    }
+
+.user-menu {
+  position: relative;
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.user-icon {
+  font-size: 20px;
+  margin-left: 20px;
+  color: #fff;
+}
+
+.dropdown {
+  display: none;
+  position: absolute;
+  top: 35px;
+  right: 0;
+  background: rgba(0, 0, 50, 0.95);
+  border-radius: 6px;
+  padding: 10px;
+  min-width: 120px;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+}
+
+.dropdown span {
+  display: block;
+  color: #e0f0ff;
+  margin-bottom: 8px;
+}
+
+.dropdown a {
+  color: #ffb3b3;
+  text-decoration: none;
+  font-weight: bold;
+}
+
+.user-menu.open .dropdown {
+  display: block;
+}
+
+    @media (max-width: 480px) {
+      .login-container {
+        width: 90%;
+        padding: 30px 20px;
+      }
+
+      h1 {
+        font-size: 1.5rem;
+      }
+
+      button {
+        font-size: 15px;
+      }
+
+      .with-navbar {
+        margin-top: 60px;
+        min-height: calc(100vh - 60px);
+      }
+    }
+  </style>
+</head>
+<body>
+    <nav class="navbar">
+    <a href="index.html" class="nav-logo">Smart Socket</a> 
+    <input type="checkbox" id="nav-toggle" class="nav-toggle">
+    <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="login.html">Sign In/Up</a></li>
+    </ul>
+    <label for="nav-toggle" class="nav-toggle-label">
+        <span></span>
+        <span></span>
+        <span></span>
+    </label>
+    <div class="user-menu" style="display: none;">
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+      </ul>
+      <div class="user-icon">👤</div>
+      <div class="dropdown">
+        <span id="user-name">Username</span>
+        <a href="#" id="logout-btn">Sign Out</a>
+      </div>
+    </div>
+    </nav>
+
+  <div class="login-container">
+    <h1>Sign Up</h1>
+    <div id="register-form">
+      <div class="form-group">
+        <label for="register-username">Username</label>
+        <input type="text" id="register-username" placeholder="Enter your username" required />
+      </div>
+      <div class="form-group">
+        <label for="register-email">Email</label> <!-- New Email Input Field -->
+        <input type="email" id="register-email" placeholder="Enter your email" required />
+      </div>
+      <div class="form-group">
+        <label for="register-password">Password</label>
+        <input type="password" id="register-password" placeholder="Enter your password" required />
+      </div>
+      <button onclick="register()">Sign Up</button>
+      <div class="error" id="error-msg"></div>
+      <div class="success" id="success-msg"></div>
+    </div>
+    <div class="switch">
+      <p>Already have an account? <a href="login.html">Sign In here</a></p>
+    </div>
+  </div>
+
+  <script>
+    async function register() {
+      const username = document.getElementById("register-username").value;
+      const email = document.getElementById("register-email").value; // Get the email value
+      const password = document.getElementById("register-password").value;
+      const errorMsg = document.getElementById("error-msg");
+      const successMsg = document.getElementById("success-msg");
+
+      errorMsg.textContent = '';
+      successMsg.textContent = '';
+
+      try {
+        const res = await fetch("/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ username, password, email }),
+        });
+
+        if (res.ok) {
+            successMsg.textContent = "Account created! Please check your email to confirm your registration.";
+        } else {
+            const result = await res.json();
+            errorMsg.textContent = result.message || "Registration failed.";
+        }
+    } catch (error) {
+        errorMsg.textContent = "Server error.";
+        console.error(error);
+    }
+    }
+  </script>
+  <script src="navbar.js"></script>
+  <script src="chat-widget.js"></script>
+
+</body>
+</html>
