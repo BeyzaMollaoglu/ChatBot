@@ -9,3 +9,7 @@ SEARCH_MAX_OPTIONS=6
 OPENROUTER_API_KEY=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
 OPENROUTER_BASE_URL=https://openrouter.ai/api/v1
 OPENROUTER_MODEL=deepseek/deepseek-chat-v3-0324:free  # Güncellenmiş model kimliği
+
+# Ollama fallback (isterseniz kapatmayın)
+OLLAMA_URL=http://localhost:11434
+MODEL_NAME=deepseek-r1:7b
