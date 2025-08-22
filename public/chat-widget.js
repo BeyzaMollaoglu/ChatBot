@@ -3,7 +3,7 @@
   if (window.__ai_widget_initialized) return;
   window.__ai_widget_initialized = true;
 
-  const OLLAMA_URL = "http://localhost:11434/api/chat";
+  const SERVER_URL = "http://localhost:3001/api/chat"; // index.js ile uyumlu endpoint
   const chatId = "ep_" + Date.now() + "_" + Math.random().toString(36).slice(2, 8);
 
   // ---------- Shadow DOM ----------
@@ -19,7 +19,7 @@
 
     #root {
       position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
-      width: 600px; height: 80vh; /* Increased size */
+      width: 600px; height: 80vh;
       background: #0f1a1a; color: #e9f1f1;
       border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,.25);
       display: flex; flex-direction: column; overflow: hidden;
@@ -77,7 +77,7 @@
   header.id = "header";
   const title = document.createElement("div");
   title.id = "title";
-  title.textContent = "AI Yardımcı";
+  title.textContent = "AkıllıYardımcı";
   const closeBtn = document.createElement("button");
   closeBtn.id = "close";
   closeBtn.textContent = "×";
@@ -92,7 +92,7 @@
   const inp = document.createElement("input");
   inp.id = "inp";
   inp.type = "text";
-  inp.placeholder = "Mesaj yazın… (ör. login sayfası)";
+  inp.placeholder = "Mesaj yazın… (ör. Beyza izni)";
   const sendBtn = document.createElement("button");
   sendBtn.id = "send";
   sendBtn.textContent = "Gönder";
@@ -103,7 +103,7 @@
   root.appendChild(msgs);
   root.appendChild(composer);
 
-  // ---------- Balon ----------
+  // ---------- Balon Oluştur ----------
   function bubble(role, text) {
     const row = document.createElement("div");
     row.className = "row " + (role === "you" ? "you" : "bot");
@@ -123,31 +123,97 @@
     const loading = bubble("bot", "Yükleniyor…");
 
     try {
-      const r = await fetch(OLLAMA_URL, {
+      const response = await fetch(SERVER_URL, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "llama3.1:8b",
-          messages: [
-            { role: "user", content: text.trim() }
-          ],
-          stream: false
+          message: text.trim(),
+          chatId: chatId
         })
       });
 
-      const data = await r.json();
-      loading.textContent = data?.message?.content || "Bir şey ters gitti.";
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      loading.textContent = data.reply || "Bir şey ters gitti.";
+
+      // Opsiyonları göster
+      if (data.options && data.options.length) {
+        data.options.forEach(opt => {
+          bubble("bot", `${opt.label}: ${opt.value}`);
+        });
+      }
+
+      // Chat geçmişini güncelle (görselde değil, istemci tarafında tut)
     } catch (err) {
-      console.error(err);
+      console.error("Mesaj gönderme hatası:", err);
       loading.textContent = "Sunucuya ulaşılamadı.";
     }
   }
 
-  // ---------- Eventler ----------
-  sendBtn.onclick = () => { const v = inp.value; inp.value = ""; send(v); };
-  inp.addEventListener("keydown", (e) => { if (e.key === "Enter") { e.preventDefault(); sendBtn.click(); }});
+  // ---------- History Yükleme ----------
+  async function loadHistory() {
+    try {
+      const response = await fetch(SERVER_URL, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ message: "", chatId: chatId })
+      });
 
-  // Initial message
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const chatHistory = data.chatHistory || [];
+      msgs.innerHTML = ""; // Mesajları temizle
+
+      chatHistory.forEach(msg => {
+        let content = msg.content;
+        try {
+          const parsed = JSON.parse(content); // JSON ise parse et
+          content = parsed.reply || content; // Sadece reply'i al
+          if (parsed.options && parsed.options.length) {
+            parsed.options.forEach(opt => {
+              bubble("bot", `${opt.label}: ${opt.value}`);
+            });
+          }
+        } catch (e) {
+          // JSON değilse olduğu gibi kullan
+        }
+        bubble(msg.role, content);
+      });
+
+      if (chatHistory.length === 0) {
+        bubble("bot", "Merhaba! Nasıl bir arama yapmak istersiniz?");
+      }
+    } catch (error) {
+      console.error("History yükleme hatası:", error);
+      bubble("bot", "Geçmiş yüklenemedi, yeni bir sohbet başlıyor.");
+    }
+  }
+
+  // ---------- Eventler ----------
+  sendBtn.onclick = () => {
+    const v = inp.value;
+    inp.value = "";
+    send(v);
+  };
+  inp.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      sendBtn.click();
+    }
+  });
+
+  closeBtn.onclick = () => {
+    host.remove(); // Widget'ı kapat
+  };
+
+  // ---------- Başlat ----------
   bubble("bot", "Merhaba! Nasıl bir arama yapmak istersiniz?");
   inp.focus();
+  loadHistory(); // History'i yükle
 })();

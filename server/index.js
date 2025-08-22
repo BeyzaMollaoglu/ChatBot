@@ -6,10 +6,7 @@ import { fileURLToPath } from "url";
 import { readFileSync, readdirSync } from "fs";
 import { load as loadHTML } from "cheerio";
 import sql from "mssql";
-import fetch from 'node-fetch';
-
-//const OLLAMA_BASE = process.env.OLLAMA_BASE_URL || "http://localhost:11434";
-//const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "llama3.1:8b";
+import fetch from "node-fetch";
 
 // LangChain (RAG)
 import { Document } from "@langchain/core/documents";
@@ -221,7 +218,17 @@ async function buildDbIndex() {
     if (!allCols.length) continue;
 
     const idCol = tableDef.columns.find(c => normTr(c.name).includes("id") || normTr(c.name).includes("key"))?.name || tableDef.columns[0].name;
-    const query = `SELECT TOP 1000 [${idCol}] AS rowId, ${allCols.join(", ")} FROM [${tableDef.schema}].[${tableDef.table}] WITH (NOLOCK)`;
+    let query = `SELECT TOP 1000 [${idCol}] AS rowId, ${allCols.join(", ")} FROM [${tableDef.schema}].[${tableDef.table}] WITH (NOLOCK)`;
+
+    // Yan tabloyu (izin_kayitlari) kontrol et
+    if (tableDef.table === 'personel') {
+      query = `
+        SELECT p.[${idCol}] AS rowId, p.*, COALESCE(SUM(ik.KullanilanGun), 0) AS ToplamKullanilan
+        FROM [${tableDef.schema}].[${tableDef.table}] p
+        LEFT JOIN [${tableDef.schema}].[izin_kayitlari] ik ON ik.PersonelId = p.[${idCol}]
+        GROUP BY p.[${idCol}], ${allCols.join(", ")}
+      `;
+    }
 
     try {
       const result = await pool.request().query(query);
@@ -232,6 +239,13 @@ async function buildDbIndex() {
         for (const col of tableDef.columns) {
           const val = row[col.name] != null ? row[col.name] : "";
           content += `${col.name}: ${val}\n`;
+        }
+        // İzin hesaplama (personel tablosunda)
+        if (tableDef.table === 'personel') {
+          const toplamIzin = parseInt(row['YillikIzin']) || 0;
+          const kullanilanIzin = parseInt(row['ToplamKullanilan']) || 0;
+          const kalanIzin = toplamIzin - kullanilanIzin;
+          content += `KalanIzin: ${kalanIzin}\n`;
         }
         content = content.trim().slice(0, 4000);
         if (!content) continue;
@@ -331,10 +345,8 @@ function generatePreview(content, query, maxLength = 150) {
   return preview.length > maxLength ? preview.slice(0, maxLength) + "..." : preview;
 }
 
-// ---- BUTTON & MINIMAL REPLY HELPERS ----
-const VALID_OPTION_TYPES = new Set(["open_url", "database", "clarification"]);
-
 function normalizeOptions(options = []) {
+  const VALID_OPTION_TYPES = new Set(["open_url", "database", "clarification"]);
   return options
     .filter(o => o && typeof o === "object")
     .map(o => ({
@@ -356,29 +368,29 @@ function buttonsFromSiteResults(siteResults = []) {
   );
 }
 
-// "izin" soruları için minimal geri dönüş (model boş dönerse)
 function extractNameFromQuery(q = "") {
   const m = q.match(/^(.+?)\s+(?:izni|izin)\b/i);
-  if (m) return m[1].trim().replace(/[?]+$/, "");
-  return q.trim();
+  return m ? m[1].trim().replace(/[?]+$/, "") : q.trim();
 }
+
 function extractKalanIzin(content = "") {
-  const m =
-    content.match(/kalan[\s_]*iz[ıi]n[:\s]*([0-9]+)/i) ||
-    content.match(/\bkalan[:\s]*([0-9]+)/i);
+  const m = content.match(/KalanIzin[:\s]*([0-9]+)/i) || // Yeni indeksleme ile eklenen alan
+            content.match(/kalan[\s_]*iz[ıi]n[:\s]*([0-9]+)/i) ||
+            content.match(/\bkalan[:\s]*([0-9]+)/i);
   return m ? Number(m[1]) : null;
 }
+
 function makeMinimalReplyFromDb(content = "", userQuery = "") {
   if (!/izin/i.test(userQuery)) return "";
   const name = extractNameFromQuery(userQuery) || "Çalışan";
   const kalan = extractKalanIzin(content);
-  if (Number.isFinite(kalan)) return `${name}’nın ${kalan} gün izni kaldı.`;
+  if (Number.isFinite(kalan)) return `${name}’nın kalan yıllık izni ${kalan} gün.`;
   return "";
 }
 
 const PROMPT_PATH = path.join(__dirname, "prompt.txt");
 
-async function processQueryWithDeepSeek(query, chatHistory = []) {
+async function processQueryWithDeepSeekFree(query, chatHistory = []) {
   try {
     // Şema bilgisini hazırlama
     const schemaInfo = JSON.stringify(
@@ -398,7 +410,7 @@ async function processQueryWithDeepSeek(query, chatHistory = []) {
     }
     const prompt = basePrompt.replace("{SCHEMA_INFO}", schemaInfo);
 
-    // Chat geçmişini DeepSeek formatına çevirme
+    // Chat geçmişini OpenRouter formatına çevirme
     const historyMessages = Array.isArray(chatHistory)
       ? chatHistory.map(m => ({
           role: m.role === "assistant" ? "assistant" : "user",
@@ -406,33 +418,36 @@ async function processQueryWithDeepSeek(query, chatHistory = []) {
         }))
       : [];
 
-    // DeepSeek API isteği için body
+    // OpenRouter API isteği için body
     const body = {
-      model: process.env.DEEPSEEK_MODEL || "deepseek-chat", // .env'den model al
+      model: process.env.OPENROUTER_MODEL || "deepseek/deepseek-chat-v3-free",
       messages: [
         { role: "system", content: prompt },
         ...historyMessages,
         { role: "user", content: query }
       ],
-      temperature: 0.7, // Yaratıcılık derecesi, isteğe bağlı
-      max_tokens: 2048, // Maksimum token sayısı, isteğe bağlı
-      stream: false // Akış modunu kapattık
+      temperature: 0.7,
+      max_tokens: 2048,
+      stream: false
     };
 
-    // DeepSeek API'ye istek atma
-    const resp = await fetch(`${process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com/v1"}/chat/completions`, {
+    // OpenRouter API'ye istek atma
+    const resp = await fetch(`${process.env.OPENROUTER_BASE_URL || "https://openrouter.ai/api/v1"}/chat/completions`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "Authorization": `Bearer ${process.env.DEEPSEEK_API_KEY}` // API anahtarı ile kimlik doğrulama
+        "Authorization": `Bearer ${process.env.OPENROUTER_API_KEY}`
       },
       body: JSON.stringify(body),
     });
 
-    if (!resp.ok) throw new Error(`DeepSeek error ${resp.status}: ${await resp.text()}`);
+    if (!resp.ok) {
+      const errorData = await resp.json();
+      throw new Error(`OpenRouter error ${resp.status}: ${JSON.stringify(errorData)}`);
+    }
     const data = await resp.json();
 
-    // Yanıtı işleme (DeepSeek genellikle 'choices' dizisi döndürür)
+    // Yanıtı işleme
     const raw = data.choices?.[0]?.message?.content || "";
     if (!raw) throw new Error("Boş yanıt alındı.");
 
@@ -463,11 +478,11 @@ async function processQueryWithDeepSeek(query, chatHistory = []) {
     const ALLOWED_INTENTS = new Set(["greeting", "general", "database", "website", "action", "clarification", "not_found", "security"]);
     if (!ALLOWED_INTENTS.has(safe.intent)) safe.intent = "general";
 
-    console.log(`[AkıllıYardımcı/DeepSeek] Sorgu: ${query} | Yanıt: ${JSON.stringify(safe)}`);
+    console.log(`[AkıllıYardımcı/DeepSeekFree] Sorgu: ${query} | Yanıt: ${JSON.stringify(safe)}`);
     return safe;
   } catch (e) {
-    console.error("DeepSeek error:", e.message);
-    return { intent: "general", reply: "DeepSeek ile bir sorun oluştu. Tekrar dener misin?", options: [], needsClarification: false };
+    console.error("DeepSeekFree error:", e.message);
+    return { intent: "general", reply: "Ücretsiz DeepSeek ile bir sorun oluştu. Tekrar dener misin?", options: [], needsClarification: false };
   }
 }
 
@@ -510,7 +525,6 @@ app.post("/api/reindex-db", async (_req, res) => {
 
 app.get("/api/search-stats", (_req, res) => { res.json({ siteStats, dbStats }); });
 
-// Chat history DB functions
 async function ensureChatTable() {
   try {
     const pool = await getPool();
@@ -555,7 +569,7 @@ async function saveChatMessage(chatId, role, content) {
     request.input('role', sql.NVarChar, role);
     request.input('content', sql.NVarChar(sql.MAX), content);
     await request.query(query);
-    console.log(`💾 Mesaj kaydedildi: ${role} (chatId: ${chatId}) ${chatId}`);
+    console.log(`💾 Mesaj kaydedildi: ${role} (chatId: ${chatId})`);
   } catch (e) {
     console.error("⚠️ Mesaj kaydetme hatası:", e.message);
   }
@@ -564,19 +578,27 @@ async function saveChatMessage(chatId, role, content) {
 app.post("/api/chat", async (req, res) => {
   try {
     const message = (req.body?.message || "").trim();
-    const chatId = req.body?.chatId || "default";
+    const chatId = req.body?.chatId || `default_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
     let chatHistory = await loadChatHistory(chatId);
-    if (!message) return res.status(400).json({ error: "Message is required" });
 
+    if (!message) {
+      return res.status(400).json({ error: "Message is required" });
+    }
+
+    // Kullanıcı mesajını kaydet
     await saveChatMessage(chatId, "user", message);
 
-    let result = await processQueryWithDeepSeek(message, chatHistory);
+    // DeepSeek ile sorguyu işle
+    let result = await processQueryWithDeepSeekFree(message, chatHistory);
 
-    if (!Array.isArray(result.options)) result.options = [];
+    // options dizisini kontrol et
+    if (!Array.isArray(result.options)) {
+      result.options = [];
+    }
 
+    // Intent'e göre ek işlevler
     if (result.intent === "database") {
       const dbResults = await dbSearch(message);
-
       if (!dbResults.length) {
         result.intent = "not_found";
         result.reply = "Uygun bir kayıt bulamadım. Ad–soyadı veya departmanı netleştirebilir misin?";
@@ -597,6 +619,17 @@ app.post("/api/chat", async (req, res) => {
           result.options = normalizeOptions(result.options);
         }
       }
+    } else if (result.intent === "website") {
+      const siteResults = await siteSearch(message);
+      if (siteResults.length) {
+        const preview = generatePreview(siteResults[0].content, message);
+        result.reply = result.reply?.trim()
+          ? result.reply
+          : `Webden buldum: ${siteResults[0].title} - ${preview}.`;
+        result.options = buttonsFromSiteResults(siteResults);
+      } else {
+        result.options = normalizeOptions(result.options);
+      }
     } else if (result.intent === "action") {
       const siteResults = await siteSearch(message + " login giriş");
       if (siteResults.length) {
@@ -611,28 +644,22 @@ app.post("/api/chat", async (req, res) => {
           result.options = normalizeOptions([{ type: "open_url", label: "Raporlar", value: "/reports.html" }]);
         }
       }
-    } else if (result.intent === "website") {
-      const siteResults = await siteSearch(message);
-      if (siteResults.length) {
-        const preview = generatePreview(siteResults[0].content, message);
-        result.reply = result.reply?.trim()
-          ? result.reply
-          : `Webden buldum: ${siteResults[0].title} - ${preview}.`;
-        result.options = buttonsFromSiteResults(siteResults);
-      } else {
-        result.options = normalizeOptions(result.options);
-      }
     } else {
       result.options = normalizeOptions(result.options);
     }
 
-    await saveChatMessage(chatId, "assistant", result.reply);
+    // Asistan yanıtını JSON olarak kaydet
+    await saveChatMessage(chatId, "assistant", JSON.stringify(result));
     chatHistory = await loadChatHistory(chatId);
 
+    // Yanıtı istemciye gönder
     return res.json({ ...result, chatHistory });
   } catch (err) {
-    console.error("Chat error:", err.message);
-    res.status(500).json({ error: "Server error", details: process.env.NODE_ENV === "development" ? err.message : undefined });
+    console.error("Chat error:", err.message, err.stack); // Daha detaylı log
+    res.status(500).json({ 
+      error: "Server error", 
+      details: process.env.NODE_ENV === "development" ? err.message : undefined 
+    });
   }
 });
 
@@ -668,10 +695,9 @@ app.post("/api/action", async (req, res) => {
         return res.json({ success: false, message: "Veri bulunamadı." });
       }
     } else if (type === "clarification") {
-      const msg =
-        value === "similar_names"
-          ? "Benzer isimleri göstermek için lütfen tam ad veya departman belirtin."
-          : "Biraz daha detay verebilir misin? (Örn: soyadı veya departman)";
+      const msg = value === "similar_names"
+        ? "Benzer isimleri göstermek için lütfen tam ad veya departman belirtin."
+        : "Biraz daha detay verebilir misin? (Örn: soyadı veya departman)";
       return res.json({ success: true, action: "reply", message: msg });
     } else {
       return res.status(400).json({ error: "Geçersiz aksiyon tipi" });
@@ -684,7 +710,7 @@ app.post("/api/action", async (req, res) => {
 
 (async () => {
   await initDb();
-  //await ensureChatTable();
+  await ensureChatTable();
   await buildSiteIndex();
   const PORT = process.env.PORT || 3001;
   app.listen(PORT, "localhost", () => {

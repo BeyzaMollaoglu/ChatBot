@@ -125,3 +125,15 @@ Yanıt:
 5. **Options Normalizasyonu**
    - Sadece şu tipler: database, open_url, clarification.
    - Label kısa ve Türkçe olmalı.
+
+{
+"intent": "clarification",
+"reply": "Tamam; önce testdb’de arayıp yoksa web’e başvuracak ve “veritabanında ara/DB” geçen sorularda kesin testdb’yi kullanacak şekilde ayarlayabilirim. testdb şemasını ve tetikleyici anahtar kelimeleri paylaşır mısın?",
+"options": [
+{"type": "clarification", "label": "Veritabanı şemasını paylaş", "value": "provide:SCHEMA_INFO"},
+{"type": "clarification", "label": "Tetikleyici anahtar kelimeler", "value": "keywords:veritabanı, db, araştır, testdb"},
+{"type": "clarification", "label": "Public dizin yolu", "value": "public_dir:/public"},
+{"type": "clarification", "label": "Web’e yalnızca sonuç yoksa bak", "value": "fallback:web_if_db_empty"}
+],
+"needsClarification": true
+}
