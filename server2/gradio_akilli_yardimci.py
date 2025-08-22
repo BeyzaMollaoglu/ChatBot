@@ -6,6 +6,7 @@ import time
 import traceback
 import pyodbc
 import gradio as gr
+import re
 
 # === Transformers & PEFT ===
 from transformers import AutoTokenizer, AutoModelForCausalLM, pipeline
@@ -50,6 +51,24 @@ Kurallar:
 """
 
 _prompt_cache = {"text": None, "mtime": None}
+
+CLEAN_MARKERS = [
+    "[END_OF_TEXT]", "END_OF_TEXT",
+    "[/ASSISTANT]", "[/USER]", "[/SYSTEM]",
+    "<|endoftext|>", "<|im_end|>", "<|im_start|>",
+    "[STOP]", "<|eot_id|>"
+]
+
+def _clean_text(t: str) -> str:
+    if not t:
+        return t
+    # bilinen belirteçleri at
+    for m in CLEAN_MARKERS:
+        t = t.replace(m, "")
+    # köşeli/üçgen parantez içindeki tek satırlık işaretleri de süpür (genel temizlik)
+    t = re.sub(r"\s*(?:<\|[^|]+?\|>|\[[A-Z_\/]+\])\s*$", "", t.strip())
+    # sonda kalan boşluk ve satır sonlarını toparla
+    return re.sub(r"\s+\Z", "", t).strip()
 
 def load_system_prompt(schema_info_text: str) -> str:
     try:
@@ -183,12 +202,24 @@ def build_hf_prompt(system_prompt: str, history_messages, user_message: str) -> 
 def hf_generate_json(system_prompt: str, history_messages, user_message: str) -> str:
     pipe = init_hf_lora()
     prompt = build_hf_prompt(system_prompt, history_messages, user_message)
-    out = pipe(prompt, max_new_tokens=256, do_sample=False, temperature=0.0)[0]["generated_text"]
+
+    out = pipe(
+        prompt,
+        max_new_tokens=256,
+        do_sample=False,
+        temperature=0.0
+    )[0]["generated_text"]
+
+    # prompt’u kes, kalan asistan çıktısını temizle
     resp = out[len(prompt):]
+    resp = _clean_text(resp)
+
+    # JSON blok ayıklama
     s, e = resp.find("{"), resp.rfind("}")
-    if s != -1 and e != -1:
-        return resp[s:e+1].strip()
-    return resp.strip()
+    if s != -1 and e != -1 and e > s:
+        return _clean_text(resp[s:e+1])
+    return resp
+
 
 # ========= Model Call =========
 def call_model(user_message: str, history_messages, chat_id: str):
@@ -197,12 +228,24 @@ def call_model(user_message: str, history_messages, chat_id: str):
         schema_info = fetch_schema_info()
         system_prompt = load_system_prompt(schema_info)
         cleaned = hf_generate_json(system_prompt, history_messages, user_message)
+
         try:
             parsed = json.loads(cleaned)
-        except:
-            parsed = {"intent": "general", "reply": cleaned[:200], "options": [], "needsClarification": False}
+            # ---> reply’i ekstra temizle
+            parsed["reply"] = _clean_text(parsed.get("reply", ""))
+            if not isinstance(parsed.get("options"), list):
+                parsed["options"] = []
+        except Exception:
+            parsed = {
+                "intent": "general",
+                "reply": _clean_text(cleaned[:200]),
+                "options": [],
+                "needsClarification": False
+            }
+
         save_chat(chat_id, "assistant", parsed.get("reply", ""))
         return parsed
+
     except Exception as e:
         err = f"⚠️ LoRA çağrı hatası: {e}"
         save_chat(chat_id, "assistant", err)

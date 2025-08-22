@@ -38,7 +38,7 @@ GR_ACC     = int(os.getenv("GR_ACC", "8"))
 HF_TOKEN   = os.getenv("HUGGINGFACE_HUB_TOKEN", None)
 
 # Dataset dosyası: varsa .jsonl, yoksa .json, yoksa train_fixed.json
-CANDIDATE_DATA = ["train.jsonl", "train.json", "train_fixed.json"]
+CANDIDATE_DATA = ["train.jsonl", "train1.json"]
 
 # Qwen 2 için tipik LoRA hedef modülleri:
 TARGET_MODULES = ["q_proj", "k_proj", "v_proj", "o_proj", "gate_proj", "up_proj", "down_proj"]
@@ -180,3 +180,8 @@ trainer.train()
 print(f"Adapter kaydediliyor → {OUT_DIR}")
 model.save_pretrained(OUT_DIR)
 print("✅ Bitti.")
+
+
+# === Train.jsonl sıfırlama ===
+open("train.jsonl", "w", encoding="utf-8").close()
+print("train.jsonl temizlendi ✅")
