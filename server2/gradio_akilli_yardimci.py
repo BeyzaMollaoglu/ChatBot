@@ -242,6 +242,25 @@ def call_model(user_message: str, history_messages, chat_id: str):
                 "options": [],
                 "needsClarification": False
             }
+            # >>> ADD: intent database ise SQL'i çalıştır
+        if (parsed.get("intent") == "database"):
+            # 1) 'sql' alanı varsa onu kullan
+            sql = _clean_text(parsed.get("sql", "")) if isinstance(parsed.get("sql", ""), str) else ""
+            # 2) yoksa options içinden type=database 'value' al
+            if not sql:
+                for o in parsed.get("options", []):
+                    if (o.get("type") == "database") and isinstance(o.get("value"), str):
+                        sql = _clean_text(o["value"])
+                        break
+            # 3) tablo adı verilmişse basit SELECT'e çevir
+            if sql and not SAFE_SQL_RE.search(sql) and re.fullmatch(r"[A-Za-z0-9_\.\[\]]{1,128}", sql):
+                sql = f"SELECT TOP 10 * FROM {sql}"
+
+            if sql:
+                ok, msg = run_readonly_select(sql)
+                parsed["reply"] = (msg if ok else f"❌ {msg}")
+            else:
+                parsed["reply"] = parsed.get("reply") or "Çalıştırılacak SQL bulunamadı."
 
         save_chat(chat_id, "assistant", parsed.get("reply", ""))
         return parsed
@@ -267,6 +286,45 @@ def test_lora_connection():
         return f"✅ LoRA yüklendi ({HF_BASE_MODEL} + {LORA_DIR})"
     except Exception as e:
         return f"❌ LoRA hatası: {e}"
+    
+# --- SAFE SQL + Runner ---
+SAFE_SQL_RE = re.compile(r"^\s*select\b", re.IGNORECASE)
+BLOCKLIST = re.compile(r"\b(insert|update|delete|drop|alter|truncate|exec|merge|grant|revoke|xp_)\b",
+                       re.IGNORECASE)
+
+def _inject_top_clause(sql: str, top_n: int = 100) -> str:
+    m = re.match(r"^\s*select\s+", sql, re.IGNORECASE)
+    if not m:
+        return sql
+    head_end = m.end()
+    if re.match(r"top\s+\d+", sql[head_end:], re.IGNORECASE):
+        return sql
+    return sql[:head_end] + f"TOP {top_n} " + sql[head_end:]
+
+def run_readonly_select(sql: str):
+    if not sql or not SAFE_SQL_RE.search(sql) or BLOCKLIST.search(sql):
+        return False, "Yalnızca SELECT sorgularına izin verilir."
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        q = _inject_top_clause(sql.strip(), 100)
+        cur.execute(q)
+        cols = [d[0] for d in cur.description] if cur.description else []
+        rows = cur.fetchall()
+
+        if not cols:
+            return True, "Sorgu çalıştı (satır/sütun döndürmedi)."
+
+        out = []
+        out.append("| " + " | ".join(cols) + " |")
+        out.append("|" + "|".join(["---"] * len(cols)) + "|")
+        for r in rows[:100]:
+            vals = [("" if v is None else str(v)) for v in r]
+            out.append("| " + " | ".join(vals) + " |")
+        return True, "\n".join(out)
+    except Exception as e:
+        return False, f"Sorgu hatası: {e}"
+
 
 # ========= Gradio UI =========
 with gr.Blocks(title="AkıllıYardımcı - LoRA + DB", css="footer {visibility: hidden}") as demo:
