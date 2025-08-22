@@ -344,6 +344,8 @@ def call_model(user_message: str, history_messages, chat_id: str):
         }
 
 # ========= Gradio App =========
+# send_message fonksiyonunu şu şekilde güncelleyin:
+
 def send_message(user_message, history, chat_id, opt_payloads):
     if not user_message.strip():
         return history, gr.update(choices=[], value=None, interactive=True), [], "", "general"
@@ -365,7 +367,9 @@ def send_message(user_message, history, chat_id, opt_payloads):
                     if bot_msg:
                         history_messages.append({"role": "assistant", "content": str(bot_msg)})
         
+        # DÜZELTME: call_model_enhanced değil, call_model kullan
         data = call_model(user_message, history_messages, chat_id)
+        
         bot_text = data.get("reply", "")
         intent = data.get("intent", "general")
         options = data.get("options", []) or []
@@ -400,7 +404,7 @@ def send_message(user_message, history, chat_id, opt_payloads):
             {"role": "assistant", "content": err}
         ]
         return new_history, gr.update(choices=[], value=None), [], json.dumps({"error": str(e)}, ensure_ascii=False, indent=2), "error"
-
+    
 def run_option(selected_label, history, chat_id, opt_payloads):
     if not selected_label:
         return history
@@ -576,3 +580,223 @@ if __name__ == "__main__":
     except Exception as e:
         print(f"Uygulama başlatma hatası: {e}")
         print(traceback.format_exc())
+
+# Mevcut kodunuzun "# ========= Model Call =========" bölümünden sonra
+# aşağıdaki fonksiyonları ekleyin:
+
+def fetch_relevant_examples(user_message: str, limit=3):
+    """
+    Kullanıcı mesajına benzer geçmiş örnekleri bulur
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        
+        # Basit kelime bazlı benzerlik
+        words = user_message.lower().split()
+        if not words:
+            return []
+            
+        # İlk 3 kelimeyi al ve arama paterni oluştur
+        search_words = words[:3]
+        search_pattern = '%' + '%'.join(search_words) + '%'
+        
+        cur.execute("""
+            SELECT TOP (?) u.Content as UserMsg, a.Content as AssistantMsg
+            FROM ChatHistory u
+            JOIN ChatHistory a ON u.ChatId = a.ChatId 
+                AND u.Id + 1 = a.Id 
+                AND u.Role = 'user' 
+                AND a.Role = 'assistant'
+            WHERE u.Content LIKE ?
+                AND u.Timestamp < DATEADD(hour, -1, GETDATE()) -- En az 1 saat önceki
+                AND LEN(a.Content) > 10
+                AND a.Content NOT LIKE '%hata%'
+                AND a.Content NOT LIKE '%⚠️%'
+            ORDER BY u.Timestamp DESC
+        """, (limit, search_pattern))
+        
+        examples = []
+        for user_msg, assistant_msg in cur.fetchall():
+            examples.append({
+                "user": user_msg,
+                "assistant": assistant_msg
+            })
+        
+        print(f"Bulunan benzer örnek sayısı: {len(examples)}")
+        return examples
+    except Exception as e:
+        print(f"Örnek alma hatası: {e}")
+        return []
+
+def fetch_successful_patterns(limit=5):
+    """
+    Son başarılı etkileşim desenlerini bulur
+    """
+    try:
+        conn = get_conn()
+        cur = conn.cursor()
+        
+        cur.execute("""
+            SELECT TOP (?) u.Content, a.Content
+            FROM ChatHistory u
+            JOIN ChatHistory a ON u.ChatId = a.ChatId 
+                AND u.Id + 1 = a.Id 
+                AND u.Role = 'user' 
+                AND a.Role = 'assistant'
+            WHERE a.Content NOT LIKE '%hata%' 
+                AND a.Content NOT LIKE '%⚠️%'
+                AND a.Content NOT LIKE '%Yanıt üretilemedi%'
+                AND LEN(a.Content) > 20
+                AND u.Timestamp > DATEADD(day, -7, GETDATE()) -- Son 7 gün
+            ORDER BY u.Timestamp DESC
+        """, (limit,))
+        
+        patterns = []
+        for user_msg, assistant_msg in cur.fetchall():
+            patterns.append({
+                "user": user_msg,
+                "assistant": assistant_msg
+            })
+        
+        print(f"Bulunan başarılı desen sayısı: {len(patterns)}")
+        return patterns
+    except Exception as e:
+        print(f"Desen alma hatası: {e}")
+        return []
+
+def build_enhanced_system_prompt(schema_info_text: str, user_message: str = "") -> str:
+    """
+    Geçmiş örneklerle zenginleştirilmiş sistem promptu
+    """
+    base_prompt = load_system_prompt(schema_info_text)
+    
+    # Benzer örnekleri al
+    examples_added = False
+    if user_message and len(user_message.split()) >= 2:  # En az 2 kelime olsun
+        examples = fetch_relevant_examples(user_message, 2)
+        if examples:
+            examples_text = "\n\n=== ÖNCEKİ BAŞARILI ÖRNEKLER ===\n"
+            for i, ex in enumerate(examples, 1):
+                examples_text += f"\nÖrnek {i}:\n"
+                examples_text += f"Kullanıcı: {ex['user'][:100]}...\n"
+                examples_text += f"Asistan: {ex['assistant'][:150]}...\n"
+            
+            base_prompt += examples_text
+            examples_added = True
+    
+    # Genel başarılı desenler (sadece örnek yoksa ekle)
+    if not examples_added:
+        patterns = fetch_successful_patterns(3)
+        if patterns:
+            pattern_text = "\n\n=== SON BAŞARILI YANITLAR ===\n"
+            for i, pattern in enumerate(patterns, 1):
+                pattern_text += f"{i}. {pattern['assistant'][:100]}...\n"
+            
+            base_prompt += pattern_text
+    
+    return base_prompt
+
+# Mevcut call_model fonksiyonunu güncelleyin:
+def call_model(user_message: str, history_messages, chat_id: str):
+    """
+    Builds messages (using prompt.txt + schema info + examples) and calls Ollama with format=json.
+    Saves user + assistant messages to DB.
+    """
+    print(f"Model çağrılıyor - Kullanıcı mesajı: {user_message}")
+    
+    # Save user message immediately
+    save_chat(chat_id, "user", user_message)
+
+    try:
+        schema_info = fetch_schema_info()
+        
+        # Zenginleştirilmiş sistem promptu kullan
+        system_prompt = build_enhanced_system_prompt(schema_info, user_message)
+
+        # Build messages - system + history + current user message
+        msgs = [{"role": "system", "content": system_prompt}]
+        
+        # Önceki mesajları ekle
+        if history_messages:
+            for msg in history_messages:
+                if isinstance(msg, dict) and "role" in msg and "content" in msg:
+                    msgs.append({"role": msg["role"], "content": str(msg["content"])})
+        
+        # Mevcut kullanıcı mesajını ekle
+        msgs.append({"role": "user", "content": user_message})
+
+        body = {
+            "model": MODEL_NAME,
+            "format": "json",
+            "messages": msgs,
+            "temperature": 0.3,
+            "max_tokens": 1024,
+            "stream": False
+        }
+        
+        print(f"Ollama'ya istek gönderiliyor: {OLLAMA_URL}/api/chat")
+        r = requests.post(f"{OLLAMA_URL}/api/chat", json=body, timeout=120)
+        r.raise_for_status()
+        
+        data = r.json()
+        raw = data.get("message", {}).get("content", "") or ""
+        
+        # JSON temizleme
+        cleaned = (
+            raw.replace("\ufeff","")
+               .replace("```json","")
+               .replace("```","")
+               .strip()
+        )
+        
+        s = cleaned.find("{")
+        e = cleaned.rfind("}")
+        if s != -1 and e != -1 and e > s:
+            cleaned = cleaned[s:e+1]
+        
+        try:
+            parsed = json.loads(cleaned)
+            print(f"JSON başarıyla parse edildi: {parsed.get('intent', 'unknown')}")
+            
+            # Başarılı yanıtı değerlendir
+            reply = parsed.get("reply", "")
+            if (parsed.get("intent") not in ["general", "not_found"] and 
+                len(reply) > 15 and 
+                "hata" not in reply.lower() and 
+                "⚠️" not in reply):
+                print("Başarılı etkileşim tespit edildi")
+                
+        except Exception as parse_error:
+            print(f"JSON parse hatası: {parse_error}")
+            print(f"Ham yanıt: {raw}")
+            parsed = {
+                "intent": "general",
+                "reply": "Yanıt üretilemedi. Lütfen yeniden dener misiniz?",
+                "options": [],
+                "needsClarification": True
+            }
+        
+        if not isinstance(parsed.get("options"), list):
+            parsed["options"] = []
+            
+        # Save assistant message
+        assistant_reply = parsed.get("reply", "")
+        save_chat(chat_id, "assistant", assistant_reply)
+        
+        return parsed
+        
+    except Exception as e:
+        error_msg = f"Ollama çağrı hatası: {e}"
+        print(f"Model çağrı hatası: {e}")
+        print(traceback.format_exc())
+        save_chat(chat_id, "assistant", error_msg)
+        return {
+            "intent": "general",
+            "reply": f"⚠️ {error_msg}",
+            "options": [],
+            "needsClarification": True
+        }
+
+# send_message fonksiyonundaki değişikliği geri alın:
+# call_model_enhanced yerine call_model kullanın (zaten güncelledik)
